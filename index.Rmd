@@ -1,0 +1,250 @@
+---
+title: "Assignment on Practical Machine Learning"
+author: "Paweł Pacewicz"
+date: "24 stycznia 2016"
+output: html_document
+---
+
+# Initiation
+
+```{r libraries, message=FALSE, warning=FALSE}
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(dplyr)
+library(lubridate)
+```
+
+
+```{r get data, echo=FALSE, cache=TRUE}
+#rm(list=ls())
+#HOME
+#setwd("C:/Users/Silverbald/Dysk Google/EDU/Coursera/Data Science/8 Machine Learning/ML-assignment")
+#WORK
+#setwd("C:/Users/pawel.pacewicz/Dysk Google/EDU/Coursera/Data Science/8 Machine Learning/assignment")
+#setwd("C:/Users/Silverbald/Dysk Google/EDU/Coursera/Data Science/8 Machine Learning/assignment")
+training<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+testing<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+#save.image(file="data.RData")
+#load("data.RData")
+```
+
+for the Reproducibility please use following seed
+
+```{r set seed}
+set.seed(1234)
+```
+
+# Introduction
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. The goal of this document is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Goal
+Goal of this project is to predict the "classe" variable in the training set. "classe" describes manner in which participants did the exercise. There are 5 different ways to do excercise:
+
+- exactly according to the specification (Class A) - correct execution of the excercise,
+- throwing the elbows to the front (Class B) - incorrect execution of the excercise,
+- lifting the dumbbell only halfway (Class C) - incorrect execution of the excercise,
+- lowering the dumbbell only halfway (Class D) - incorrect execution of the excercise,
+- and throwing the hips to the front (Class E) - incorrect execution of the excercise.
+
+## Data
+
+Data consisit of `r dim(training)[2]` columns
+it was splited into 2 sets:
+
+- training set: `r dim(training)[1]` records
+- testing set: `r dim(testing)[1]` records
+
+there are `r n_sensors<-length(colnames(select(training, contains("amplitude_pitch_")))); n_sensors` sensors located on:
+
+- arm (columns contains "_arm")
+- belt (columns contains "_belt")
+- forearm (columns contains "_forearm")
+- dumbbell (columns contains "_dumbbell")
+
+each of those sensors is measuring `r n_meassured_values<-length(colnames(select(training, contains("_arm")))); n_meassured_values` values which are recorded in columns of our data. For example for sensor located on arm column names are following:
+```{r, echo=FALSE}
+colnames(select(training, contains("_arm")))
+```
+all combinations of sensor locations (`r n_sensors`) and measured values (`r n_meassured_values`) gives us `r n_sensors * n_meassured_values`. All columns in data is `r dim(training)[2]` so other columns are:
+```{r, echo=FALSE}
+colnames(select(training, -contains("_arm"), -contains("_belt"), -contains("_forearm"), -contains("_dumbbell")))
+```
+
+
+# Expected out of sample error
+
+I expect that:
+
+- The expected out-of-sample error will be higher than in-sample error.
+- The Expected out-of-sample error of Decision Tree will be higher than for Random Forest (mainly due to fact that Random Forest is result of many Decision trees).
+
+## How cross validation was used
+
+Cross-validation will be performed by 8-fold sampling on sub-training data set: sub-training data (70% of the original Training data set) and subTesting data (30%). Models will trained on the subTraining data set, and tested on the subTesting data. Then final model will be tested on the original Testing data set.
+
+# How model was built
+
+Model was build with the following steps:
+
+1. cleaning the data - removing data (columns) which does not affect results (or affect it slightly)
+1. preparing sub-training and sub-testing sets
+1. training algorithms (on sub-training data) - Decision Trees and Random Forest
+1. making predictions (on sub-testing data)
+1. comparing prediction results on both algorithms
+1. using better algorithm to predict testing data
+
+# cleaning the data
+
+Goal of this part is to clean all columns which does not affect result or affect it slightly.
+It's done in following steps:
+
+## removing columns with near zero variance
+
+```{r near zero value}
+nzv_training<-nearZeroVar(training, saveMetrics = TRUE)
+training<-training[,!nzv_training$nzv]
+testing<-testing[,!nzv_training$nzv]
+```
+
+## removing variables with high level of NAs (50%)
+
+```{r high level NAs}
+highLevelNAs<-sapply(training, function(x) {(sum(is.na(x))/nrow(training))>0.5})
+training<-training[,!highLevelNAs]
+testing<-testing[,!highLevelNAs]
+```
+
+## removing data not related to measurements
+
+data not related to measurement is located in columns 1-6:
+
+```{r}
+colnames(training[,1:6])
+```
+
+removing those columns:
+
+```{r predictors not related to measuremenrts}
+training<-training[,-(1:6)]
+testing<-testing[,-(1:6)]
+```
+
+## removing highly correlated columns
+
+Columns whivch are highly corelated does not provide any additional value to out trainings and predictions.
+
+```{r highly correlated}
+highlyCor<-findCorrelation(cor(training[,-53]))
+training<-training[,-highlyCor]
+testing<-testing[,-highlyCor]
+```
+
+# preparing sub-training and sub-testing sets
+
+Training data will be split into 2 sub-sets:
+
+1. SubTraining (70%)
+1. SubTesting (30%)
+
+```{r create Data Partition}
+inTrain <- createDataPartition(y=training$classe, p=0.7, list=FALSE)
+subTraining <- training[inTrain, ]
+subTesting <- training[-inTrain, ]
+```
+
+# Training and prediction
+
+Two training alorithms will be used:
+
+1. Decision Tree
+1. Random Forest
+
+for both of them the same trainControl patrameters will be used.
+
+
+Here is definition of Cross Validation usage with 8 folds. It will be applied for both training alghoritms.
+
+```{r train Control}
+tc <- trainControl(method = "cv", number = 8, verboseIter=FALSE , preProcOptions="pca", allowParallel=TRUE)
+```
+
+## Decision Tree
+
+preparing model based on Decision Tree
+
+```{r train Decision Tree, cache=TRUE}
+modFit_DT<-train(classe~., data=subTraining, method="rpart", trControl=tc)
+```
+
+## Random Forest
+
+preparing model based on Random Forest
+
+```{r train Random Forest, cache=TRUE}
+modFit_RF<-train(classe~., data=subTraining, method="rf", trControl=tc)
+```
+
+# results
+
+## predictions
+
+prediction based on Decision Tree 
+
+```{r predict Decision Tree}
+predict_DT<-predict(modFit_DT, newdata = subTesting[,-46])
+```
+
+prediction based on Random Forest
+
+```{r predict Random Forest}
+predict_RF<-predict(modFit_RF, newdata = subTesting[,-46])
+```
+
+## comparition
+
+below are results for both algorithms
+
+```{r confusionMatrix Decision Tree}
+cf_DT<-confusionMatrix(predict_DT,subTesting$classe)
+cf_DT
+```
+
+```{r confusionMatrix Random Forest}
+cf_RF<-confusionMatrix(predict_RF,subTesting$classe)
+cf_RF
+```
+
+we can se clearly that Random Forest accuracy is very high `r cf_DT$overall[[1]]` and much better than Decision Tree accuracy `r cf_RF$overall[[1]]`. Due to that we will use Random Forest model to make final prediction on testing data
+
+calculating results on final data set:
+
+```{r calculating results on final data set}
+results<-predict(modFit_RF, newdata = testing[,-46])
+```
+
+results:
+
+```{r results on final data set}
+results
+```
+
+# sources
+
+Source of data:
+http://groupware.les.inf.puc-rio.br/har#ixzz3yqY8niSY
+
+## DLA dataset and literature review
+
+Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. 
+Cited by 2 (Google Scholar) 
+
+## WLE dataset
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013. 
