@@ -27,7 +27,7 @@ testing<-read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testi
 #load("data.RData")
 ```
 
-for the Reproducibility please use following seed
+for the reproducibility please use following seed
 
 ```{r set seed}
 set.seed(1234)
@@ -80,7 +80,7 @@ I expect that:
 - The expected out-of-sample error will be higher than in-sample error.
 - The Expected out-of-sample error of Decision Tree will be higher than for Random Forest (mainly due to fact that Random Forest is result of many Decision trees).
 
-## How cross validation was used
+# How cross validation was used
 
 Cross-validation will be performed by 8-fold sampling on sub-training data set: sub-training data (70% of the original Training data set) and subTesting data (30%). Models will trained on the subTraining data set, and tested on the subTesting data. Then final model will be tested on the original Testing data set.
 

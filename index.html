@@ -77,7 +77,7 @@ library(RColorBrewer)
 library(rattle)
 library(dplyr)
 library(lubridate)</code></pre>
-<p>for the Reproducibility please use following seed</p>
+<p>for the reproducibility please use following seed</p>
 <pre class="r"><code>set.seed(1234)</code></pre>
 </div>
 <div id="introduction" class="section level1">
@@ -138,10 +138,10 @@ library(lubridate)</code></pre>
 <li>The expected out-of-sample error will be higher than in-sample error.</li>
 <li>The Expected out-of-sample error of Decision Tree will be higher than for Random Forest (mainly due to fact that Random Forest is result of many Decision trees).</li>
 </ul>
-<div id="how-cross-validation-was-used" class="section level2">
-<h2>How cross validation was used</h2>
-<p>Cross-validation will be performed by 8-fold sampling on sub-training data set: sub-training data (70% of the original Training data set) and subTesting data (30%). Models will trained on the subTraining data set, and tested on the subTesting data. Then final model will be tested on the original Testing data set.</p>
 </div>
+<div id="how-cross-validation-was-used" class="section level1">
+<h1>How cross validation was used</h1>
+<p>Cross-validation will be performed by 8-fold sampling on sub-training data set: sub-training data (70% of the original Training data set) and subTesting data (30%). Models will trained on the subTraining data set, and tested on the subTesting data. Then final model will be tested on the original Testing data set.</p>
 </div>
 <div id="how-model-was-built" class="section level1">
 <h1>How model was built</h1>
